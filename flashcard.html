@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Notes Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Consolas&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --active: #00fbff;
+            --pending: #FFD700;
+            --overdue: #FF4500;
+            --done: #32CD32;
+            --primary: #1E90FF;
+            --secondary: #FF69B4;
+            --danger: #8b001c;
+            --completed: #228B22;
+            --background: #E6E6FA;
+            --accent: #FFD700;
+        }
+
+        body {
+            font-family: 'Consolas', monospace;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--background), #FFFACD);
+            color: #222;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: auto;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+            max-width: 800px;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.2), transparent);
+            animation: sparkle 8s infinite;
+        }
+
+        @keyframes sparkle {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        h1 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.8rem;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        h2 {
+            font-family: 'Press Start 2P';
+            font-size: 1.2rem;
+            color: var(--primary);
+            margin-bottom: 15px;
+        }
+
+        h3 {
+            font-family: 'Press Start 2P';
+            font-size: 1rem;
+            color: var(--secondary);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .upload-section, .notes-section {
+            background: #F0F8FF;
+            border: 2px solid var(--accent);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-family: 'Press Start 2P';
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: var(--secondary);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 1rem;
+            background: white;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+            outline: none;
+        }
+
+        #pdf-viewer-container {
+            width: 100%;
+            max-height: 500px;
+            border: 2px solid var(--primary);
+            border-radius: 10px;
+            margin-top: 15px;
+            background: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            overflow-y: auto;
+            position: relative;
+        }
+
+        #pdf-pages {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+
+        .pdf-page-container {
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .pdf-page-canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #notes-output {
+            background: white;
+            padding: 20px;
+            border: 2px solid var(--primary);
+            border-radius: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 1rem;
+            white-space: pre-line;
+            min-height: 100px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .note-item {
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+            font-size: 1rem;
+        }
+
+        .note-item:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Notes Quest</h1>
+    </header>
+
+    <div class="container">
+        <div class="upload-section">
+            <h2>1. Upload PDF</h2>
+            <input type="file" id="pdf-upload" accept=".pdf">
+            <div id="pdf-viewer-container" class="hidden">
+                <div id="pdf-pages"></div>
+            </div>
+        </div>
+        
+        <div class="notes-section">
+            <h2>2. Generate Notes</h2>
+            <div class="controls">
+                <button id="extract-btn">Extract Text from PDF</button>
+                <button id="generate-notes-btn">Generate Formatted Notes</button>
+            </div>
+            
+            <textarea id="extracted-text" placeholder="Extracted text will appear here..."></textarea>
+            
+            <h3>Generated Notes</h3>
+            <div id="notes-output">
+                <p>Your formatted notes will appear here...</p>
+            </div>
+            
+            <div class="controls">
+                <button id="copy-notes-btn">Copy Notes</button>
+                <button id="download-notes-btn">Download Notes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+        
+        let pdfDoc = null;
+        let pdfText = '';
+        
+        // DOM elements
+        const pdfUpload = document.getElementById('pdf-upload');
+        const pdfViewerContainer = document.getElementById('pdf-viewer-container');
+        const pdfPagesContainer = document.getElementById('pdf-pages');
+        const extractBtn = document.getElementById('extract-btn');
+        const generateNotesBtn = document.getElementById('generate-notes-btn');
+        const extractedText = document.getElementById('extracted-text');
+        const notesOutput = document.getElementById('notes-output');
+        const copyNotesBtn = document.getElementById('copy-notes-btn');
+        const downloadNotesBtn = document.getElementById('download-notes-btn');
+        
+        // Event listeners
+        pdfUpload.addEventListener('change', handlePDFUpload);
+        extractBtn.addEventListener('click', extractTextFromPDF);
+        generateNotesBtn.addEventListener('click', generateFormattedNotes);
+        copyNotesBtn.addEventListener('click', copyNotesToClipboard);
+        downloadNotesBtn.addEventListener('click', downloadNotes);
+        
+        // Handle PDF upload
+        async function handlePDFUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const url = URL.createObjectURL(file);
+            
+            try {
+                // Clear previous PDF
+                pdfPagesContainer.innerHTML = '';
+                pdfText = '';
+                
+                // Load the PDF
+                const loadingTask = pdfjsLib.getDocument(url);
+                pdfDoc = await loadingTask.promise;
+                
+                // Show the viewer
+                pdfViewerContainer.classList.remove('hidden');
+                
+                // Render all pages
+                await renderAllPages();
+                
+            } catch (error) {
+                console.error('Error loading PDF:', error);
+                alert('Error loading PDF. Please try another file.');
+            }
+        }
+        
+        // Render all pages of the PDF
+        async function renderAllPages() {
+            pdfText = ''; // Reset extracted text
+            
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                try {
+                    const page = await pdfDoc.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.0 });
+                    
+                    // Create container for this page
+                    const pageContainer = document.createElement('div');
+                    pageContainer.className = 'pdf-page-container';
+                    
+                    // Create canvas for this page
+                    const canvas = document.createElement('canvas');
+                    canvas.className = 'pdf-page-canvas';
+                    pageContainer.appendChild(canvas);
+                    
+                    // Add to pages container
+                    pdfPagesContainer.appendChild(pageContainer);
+                    
+                    // Adjust canvas dimensions
+                    const scale = Math.min((pdfViewerContainer.clientWidth - 40) / viewport.width, 1.5);
+                    const scaledViewport = page.getViewport({ scale });
+                    
+                    canvas.height = scaledViewport.height;
+                    canvas.width = scaledViewport.width;
+                    
+                    // Render PDF page
+                    await page.render({
+                        canvasContext: canvas.getContext('2d'),
+                        viewport: scaledViewport
+                    }).promise;
+                    
+                    // Extract text for processing
+                    const textContent = await page.getTextContent();
+                    pdfText += textContent.items.map(item => item.str).join(' ') + '\n\n';
+                    
+                } catch (error) {
+                    console.error(`Error rendering page ${i}:`, error);
+                }
+            }
+        }
+        
+        // Extract text from PDF
+        function extractTextFromPDF() {
+            if (!pdfText) {
+                alert('Please upload a PDF first.');
+                return;
+            }
+            extractedText.value = pdfText;
+        }
+        
+        // Generate formatted notes from extracted text
+        function generateFormattedNotes() {
+            if (!extractedText.value) {
+                alert('Please extract text from PDF first.');
+                return;
+            }
+            
+            let text = extractedText.value;
+            
+            // Clean up the text
+            text = text.replace(/\s+/g, ' ').trim(); // Remove extra spaces
+            
+            // Split into sentences
+            let sentences = text.split(/(?<=[.!?])\s+/);
+            
+            // Process each sentence into a note item
+            let formattedNotes = '';
+            
+            sentences.forEach(sentence => {
+                if (sentence.trim().length > 0) {
+                    // Skip very short fragments
+                    if (sentence.split(' ').length > 3) {
+                        // Capitalize first letter
+                        sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1);
+                        
+                        // Add bullet point
+                        formattedNotes += `• ${sentence}\n`;
+                    }
+                }
+            });
+            
+            // Format headings (text in all caps)
+            formattedNotes = formattedNotes.replace(/(• [A-Z][A-Z0-9 ,-]+)\n/g, '\n$1\n\n');
+            
+            notesOutput.innerHTML = formattedNotes;
+        }
+        
+        // Copy notes to clipboard
+        function copyNotesToClipboard() {
+            const notesText = notesOutput.innerText;
+            if (!notesText || notesText === 'Your formatted notes will appear here...') {
+                alert('No notes to copy. Generate notes first.');
+                return;
+            }
+            
+            navigator.clipboard.writeText(notesText)
+                .then(() => alert('Notes copied to clipboard!'))
+                .catch(err => alert('Failed to copy notes: ' + err));
+        }
+        
+        // Download notes as text file
+        function downloadNotes() {
+            const notesText = notesOutput.innerText;
+            if (!notesText || notesText === 'Your formatted notes will appear here...') {
+                alert('No notes to download. Generate notes first.');
+                return;
+            }
+            
+            const blob = new Blob([notesText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'generated-notes.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

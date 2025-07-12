@@ -1,0 +1,2245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyQuest - Gamified Learning</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@400;700&family=Consolas&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <!-- Add confetti library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --active: #00fbff;
+            --pending: #FFD700;
+            --overdue: #FF4500;
+            --done: #32CD32;
+            --primary: #1E90FF;
+            --secondary: #FF69B4;
+            --danger: #8b001c;
+            --completed: #228B22;
+            --background: #E6E6FA;
+            --accent: #FFD700;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: var(--secondary);
+            opacity: 0.7;
+            border-radius: 50%;
+            animation: fall 5s linear forwards;
+        }
+
+        @keyframes fall {
+            to { transform: translateY(100vh) rotate(360deg); }
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+            20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+        }
+
+        body {
+            font-family: 'Consolas', monospace;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, var(--background), #FFFACD);
+            color: #222;
+            overflow-x: hidden;
+            animation: fadeIn 1s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 320px 1fr 320px;
+            gap: 25px;
+            padding: 25px;
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+
+        header {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        nav {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+            font-size: 16px;
+        }
+
+        nav a{
+            padding: 15px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+            background: rgba(255,255, 255,0.25);
+            font-family: 'Press Start 2P';
+            color: white;
+        }
+        header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.2), transparent);
+            animation: sparkle 8s infinite;
+        }
+
+        @keyframes sparkle {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        h1, h2, .subject-title {
+            font-family: 'Press Start 2P', cursive;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin: 0;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin: 0 0 15px 0;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar:hover {
+            transform: translateY(-5px);
+        }
+
+        .main-content {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease;
+        }
+
+        .main-content:hover {
+            transform: translateY(-5px);
+        }
+
+        .subject-section {
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .subject-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .subject-title {
+            font-size: 1.3rem;
+            color: var(--primary);
+            padding-bottom: 8px;
+            flex-grow: 1;
+        }
+
+        .delete-subject {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: transform 0.2s;
+        }
+
+        .delete-subject:hover {
+            transform: scale(1.2);
+        }
+
+        .add-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+
+        .add-btn:hover {
+            transform: rotate(90deg);
+        }
+
+        .topics-list {
+            min-height: 30px;
+        }
+
+        .topic-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 6px 0;
+            border-radius: 8px;
+            background: #F0F8FF;
+            cursor: move;
+            border: 2px solid var(--accent);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .topic-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+
+        .topic-item.dragging {
+            opacity: 0.7;
+            background: var(--secondary);
+            transform: scale(1.05);
+        }
+
+        .topic-item-handle {
+            margin-right: 10px;
+            color: #666;
+            cursor: move;
+            font-size: 1.2rem;
+        }
+
+        .status-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .status-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            min-width: 80px;
+            text-align: center;
+            transition: transform 0.2s;
+            font-family: 'Consolas', monospace;
+        }
+
+        .status-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .status-btn.pending { background: var(--pending); color: #333; }
+        .status-btn.active { background: var(--active); }
+        .status-btn.overdue { background: var(--overdue); color: white; }
+        .status-btn.done { background: var(--done); }
+
+        .status-options {
+            display: none;
+            position: absolute;
+            right: 0;
+            background: white;
+            min-width: 120px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            z-index: 10;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .status-options.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .status-option {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+            font-family: 'Consolas', monospace;
+        }
+
+        .status-option:hover {
+            background: var(--accent);
+        }
+
+        .status-option.pending { background: var(--pending); }
+        .status-option.active { background: var(--active); }
+        .status-option.overdue { background: var(--overdue); color: white; }
+        .status-option.done { background: var(--done); }
+
+        .todo-list {
+            margin-top: 25px;
+        }
+
+        .todo-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 2px solid var(--accent);
+            transition: transform 0.2s;
+        }
+
+        .todo-item:hover {
+            transform: translateX(5px);
+        }
+
+        .todo-item-content {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+        }
+
+        .todo-item input[type="checkbox"] {
+            margin-right: 12px;
+            transform: scale(1.3);
+        }
+
+        .delete-todo {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: transform 0.2s;
+        }
+
+        .delete-todo:hover {
+            transform: scale(1.2);
+        }
+
+        .add-todo {
+            display: flex;
+            margin-top: 20px;
+        }
+
+        .add-todo input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 2px solid var(--accent);
+            border-radius: 8px 0 0 8px;
+            font-size: 1rem;
+            font-family: 'Consolas', monospace;
+        }
+
+        .add-todo input:focus {
+            border-color: var(--primary);
+            outline: none;
+        }
+
+        .add-todo button {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            font-family: 'Press Start 2P';
+            transition: background 0.2s;
+        }
+
+        .add-todo button:hover {
+            background: var(--secondary);
+        }
+
+        .exam-schedule {
+            margin-top: 35px;
+        }
+
+        .exam-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .exam-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #F0F8FF;
+            border-radius: 8px;
+            border: 2px solid var(--accent);
+            transition: transform 0.2s;
+        }
+
+        .exam-item:hover {
+            transform: translateX(5px);
+        }
+
+        .exam-item-content {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+        }
+
+        .exam-checkbox {
+            margin-right: 12px;
+            transform: scale(1.3);
+        }
+
+        .delete-exam {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: transform 0.2s;
+        }
+
+        .delete-exam:hover {
+            transform: scale(1.2);
+        }
+
+        .exam-item.urgent {
+            background: var(--overdue);
+            color: white;
+            font-weight: bold;
+            animation: pulse 1.5s infinite;
+        }
+
+        .exam-item.past {
+            background: #DCDCDC;
+            color: #555;
+        }
+
+        .exam-item.completed {
+            background: var(--done);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+
+        .add-exam {
+            display: flex;
+            margin-top: 20px;
+        }
+
+        .add-exam input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 2px solid var(--accent);
+            border-radius: 8px 0 0 8px;
+            font-size: 1rem;
+            font-family: 'Consolas', monospace;
+        }
+
+        .add-exam input[type="date"] {
+            flex-grow: 0;
+            width: 140px;
+            margin-left: 8px;
+            border-radius: 8px;
+        }
+
+        .add-exam button {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            font-family: 'Press Start 2P';
+            transition: background 0.2s;
+        }
+
+        .add-exam button:hover {
+            background: var(--secondary);
+        }
+
+        .deadlines {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease;
+        }
+
+        .deadlines:hover {
+            transform: translateY(-5px);
+        }
+
+        .deadline-item {
+            padding: 10px;
+            margin: 8px 0;
+            border-left: 5px solid var(--primary);
+            background: #F0F8FF;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+
+        .deadline-item:hover {
+            transform: translateX(5px);
+        }
+
+        .deadline-item.urgent {
+            border-left-color: var(--overdue);
+            background: #FFE4E1;
+        }
+
+        .deadline-item.completed {
+            border-left-color: var(--completed);
+            background: #E0FFE0;
+        }
+
+        .deadline-item.past {
+            border-left-color: #ccc;
+            background: #f0f0f0;
+            color: #666;
+        }
+
+        .add-subject {
+            display: flex;
+            margin-bottom: 25px;
+        }
+
+        .add-subject input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 2px solid var(--accent);
+            border-radius: 8px 0 0 8px;
+            font-size: 1rem;
+            font-family: 'Consolas', monospace;
+        }
+
+        .add-subject button {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            font-family: 'Press Start 2P';
+            transition: background 0.2s;
+        }
+
+        .add-subject button:hover {
+            background: var(--secondary);
+        }
+
+        .add-topic {
+            display: flex;
+            margin-top: 15px;
+        }
+
+        .add-topic input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 2px solid var(--accent);
+            border-radius: 8px 0 0 8px;
+            font-size: 1rem;
+            font-family: 'Consolas', monospace;
+        }
+
+        .add-topic button {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            font-family: 'Press Start 2P';
+            transition: background 0.2s;
+        }
+
+        .add-topic button:hover {
+            background: var(--secondary);
+        }
+
+        .xp-system {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+
+        .xp-info {
+            font-family: 'Press Start 2P';
+            font-size: 1rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .progress-container {
+            margin-top: 10px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 12px;
+            height: 25px;
+            overflow: hidden;
+            width: 60%;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.5s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.2) 75%, transparent 75%, transparent);
+            background-size: 20px 20px;
+            animation: move 2s linear infinite;
+        }
+
+        @keyframes move {
+            0% { background-position: 0 0; }
+            100% { background-position: 20px 20px; }
+        }
+
+        .badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .badge {
+            width: 60px;
+            height: 60px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Press Start 2P';
+            font-size: 1.8rem;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+            transition: transform 0.3s;
+            animation: bounceIn 0.5s ease;
+        }
+
+        .badge:hover {
+            transform: scale(1.1);
+        }
+
+        .badge.locked {
+            background: #A9A9A9;
+            color: #555;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            width: 350px;
+            max-width: 95%;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+            animation: slideIn 0.3s ease;
+            font-family: 'Consolas', monospace;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 25px;
+            gap: 15px;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Press Start 2P';
+            transition: background 0.2s;
+        }
+
+        .modal-btn.cancel {
+            background: #ccc;
+        }
+
+        .modal-btn.cancel:hover {
+            background: #aaa;
+        }
+
+        .modal-btn.confirm {
+            background: var(--danger);
+            color: white;
+        }
+
+        .modal-btn.confirm:hover {
+            background: #B22222;
+        }
+
+        /* Calendar Styles */
+        .calendar {
+            grid-column: 1 / -1;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            margin-top: 25px;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .calendar-title {
+            font-family: 'Press Start 2P';
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+
+        .calendar-nav {
+            display: flex;
+            gap: 15px;
+        }
+
+        .calendar-nav button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 15px;
+            cursor: pointer;
+            font-family: 'Press Start 2P';
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+
+        .calendar-nav button:hover {
+            background: var(--secondary);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+        }
+
+        .calendar-day-header {
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+            background: var(--primary);
+            color: white;
+            border-radius: 6px;
+            font-family: 'Press Start 2P';
+            font-size: 0.8rem;
+        }
+
+        .calendar-day {
+            min-height: 100px;
+            padding: 8px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            background: white;
+            transition: transform 0.2s;
+        }
+
+        .calendar-day:hover {
+            transform: scale(1.02);
+        }
+
+        .calendar-day.empty {
+            background: #f5f5f5;
+            border: 2px dashed #ccc;
+        }
+
+        .calendar-date {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: var(--primary);
+        }
+
+        .calendar-day.today {
+            background: #FFFACD;
+            border-color: var(--accent);
+        }
+
+        .calendar-day.other-month {
+            opacity: 0.6;
+        }
+
+        .calendar-events {
+            margin-top: 5px;
+        }
+
+        .calendar-event {
+            font-size: 0.8rem;
+            padding: 3px 6px;
+            margin-bottom: 3px;
+            border-radius: 4px;
+            background: #F0F8FF;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border-left: 3px solid var(--primary);
+        }
+
+        .calendar-event.exam {
+            background: #FFE4E1;
+            border-left-color: var(--overdue);
+        }
+
+        .calendar-event.completed {
+            background: #E0FFE0;
+            border-left-color: var(--done);
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+
+        .calendar-event:hover {
+            transform: translateX(3px);
+        }
+
+        .add-event-btn {
+            display: block;
+            width: 100%;
+            margin-top: 5px;
+            padding: 3px;
+            background: rgba(0,0,0,0.05);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+
+        .add-event-btn:hover {
+            background: var(--accent);
+        }
+
+        .event-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .event-modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            width: 400px;
+            max-width: 95%;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+            animation: slideIn 0.3s ease;
+        }
+
+        .event-modal h3 {
+            margin-top: 0;
+            font-family: 'Press Start 2P';
+            color: var(--primary);
+        }
+
+        .event-form-group {
+            margin-bottom: 15px;
+        }
+
+        .event-form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .event-form-group input,
+        .event-form-group select,
+        .event-form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid var(--accent);
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+        }
+
+        .event-form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .event-modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .event-modal-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Press Start 2P';
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+
+        .event-modal-btn.save {
+            background: var(--primary);
+            color: white;
+        }
+
+        .event-modal-btn.save:hover {
+            background: var(--secondary);
+        }
+
+        .event-modal-btn.cancel {
+            background: #ccc;
+        }
+
+        .event-modal-btn.cancel:hover {
+            background: #aaa;
+        }
+
+        .event-modal-btn.delete {
+            background: var(--danger);
+            color: white;
+        }
+
+        .event-modal-btn.delete:hover {
+            background: #B22222;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar, .main-content, .deadlines {
+                grid-column: 1;
+            }
+            
+            .calendar {
+                order: 4; /* Moves calendar to bottom on mobile */
+            }
+        }
+
+        @media (max-width: 768px) {
+            header{
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            h2 {
+                font-size: 1.2rem;
+            }
+            
+            .subject-title {
+                font-size: 1rem;
+            }
+            
+            .add-subject, .add-todo, .add-exam, .add-topic {
+                flex-direction: column;
+            }
+            
+            .add-subject input, 
+            .add-todo input, 
+            .add-exam input,
+            .add-topic input {
+                border-radius: 8px;
+                margin-bottom: 8px;
+            }
+            
+            .add-subject button, 
+            .add-todo button, 
+            .add-exam button,
+            .add-topic button {
+                border-radius: 8px;
+                width: 100%;
+            }
+            
+            .exam-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .exam-item-content {
+                margin-bottom: 10px;
+            }
+            
+            .calendar-day {
+                min-height: 80px;
+                padding: 5px;
+            }
+            
+            .calendar-event {
+                font-size: 0.7rem;
+                padding: 2px 4px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+                gap: 15px;
+            }
+            
+            .calendar-grid {
+                gap: 5px;
+            }
+            
+            .calendar-day-header {
+                padding: 5px;
+                font-size: 0.6rem;
+            }
+            
+            .calendar-day {
+                min-height: 60px;
+            }
+            
+            .modal-content, .event-modal-content {
+                width: 90%;
+                padding: 15px;
+            }
+            
+            .xp-system {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .progress-container {
+                width: 100%;
+                margin-top: 10px;
+            }
+            
+            nav a {
+                display: block;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>StudyQuest</h1>
+            <p>Level Up your Learning!</p>
+            <div class="xp-system">
+                <div class="xp-info">
+                    <strong>Level:</strong> <span id="level">1</span> <br>
+                    <strong>XP:</strong> <span id="xp">0</span>/<span id="xp-to-next-level">600</span>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+        </header>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="pomodoro.html">Pomodoro Timer</a>
+            <a href="tracker.html">Habit Tracker</a>
+            <a href="flashcard.html">Notes Generator</a>
+        </nav>
+        <!-- Left Sidebar - Subjects & Topics -->
+        <div class="sidebar">
+            <div class="add-subject">
+                <input type="text" id="new-subject" placeholder="Add new subject...">
+                <button id="add-subject-btn">Add</button>
+            </div>
+            
+            <div id="subjects-container">
+                <!-- Subjects will be added here dynamically -->
+            </div>
+        </div>
+        
+        <!-- Main Content - To-Do List & Exams -->
+        <div class="main-content">
+            <h2>Today's Quest Log</h2>
+            <div class="todo-list" id="todo-list">
+                <!-- To-do items will be added here dynamically -->
+            </div>
+            
+            <div class="add-todo">
+                <input type="text" id="new-todo" placeholder="Add a new task...">
+                <button id="add-todo-btn">Add</button>
+            </div>
+            
+            <div class="exam-schedule">
+                <div class="exam-header">
+                    <h2>Assignment Schedule</h2>
+                </div>
+                <div id="exams-container">
+                    <!-- Exams will be added here dynamically -->
+                </div>
+                
+                <div class="add-exam">
+                    <input type="text" id="new-exam" placeholder="Exam name">
+                    <input type="date" id="exam-date">
+                    <button id="add-exam-btn">Add</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Sidebar - Deadlines -->
+        <div class="sidebar deadlines">
+            <h2>Upcoming Deadlines</h2>
+            <div id="deadlines-container">
+                <!-- Deadlines will be added here dynamically -->
+            </div>
+        </div>
+
+        <!-- Calendar Section -->
+        <div class="calendar">
+            <div class="calendar-header">
+                <h2>Planner</h2>
+                <h2 class="calendar-title" id="calendar-month-year">Month Year</h2>
+                <div class="calendar-nav">
+                    <button id="prev-month">&lt; Prev</button>
+                    <button id="today-btn">Today</button>
+                    <button id="next-month">Next &gt;</button>
+                </div>
+            </div>
+            
+            <div class="calendar-grid" id="calendar-days-header">
+                <div class="calendar-day-header">Sun</div>
+                <div class="calendar-day-header">Mon</div>
+                <div class="calendar-day-header">Tue</div>
+                <div class="calendar-day-header">Wed</div>
+                <div class="calendar-day-header">Thu</div>
+                <div class="calendar-day-header">Fri</div>
+                <div class="calendar-day-header">Sat</div>
+            </div>
+            
+            <div class="calendar-grid" id="calendar-days">
+                <!-- Calendar days will be generated here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="confirm-modal">
+        <div class="modal-content">
+            <p>Are you sure you want to delete this item?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" id="cancel-delete">Cancel</button>
+                <button class="modal-btn confirm" id="confirm-delete">Delete</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Event Modal -->
+    <div class="event-modal" id="event-modal">
+        <div class="event-modal-content">
+            <h3 id="event-modal-title">Add Event</h3>
+            <form id="event-form">
+                <input type="hidden" id="event-id">
+                <input type="hidden" id="event-date">
+                
+                <div class="event-form-group">
+                    <label for="event-name">Event Name</label>
+                    <input type="text" id="event-name" required>
+                </div>
+                
+                <div class="event-form-group">
+                    <label for="event-type">Event Type</label>
+                    <select id="event-type">
+                        <option value="general">General</option>
+                        <option value="exam">Exam/Assignment</option>
+                        <option value="study">Study Session</option>
+                    </select>
+                </div>
+                
+                <div class="event-form-group">
+                    <label for="event-start-time">Start Time</label>
+                    <input type="time" id="event-start-time">
+                </div>
+                
+                <div class="event-form-group">
+                    <label for="event-end-time">End Time</label>
+                    <input type="time" id="event-end-time">
+                </div>
+                
+                <div class="event-form-group">
+                    <label for="event-description">Description</label>
+                    <textarea id="event-description"></textarea>
+                </div>
+                
+                <div class="event-modal-buttons">
+                    <button type="button" class="event-modal-btn delete" id="delete-event-btn">Delete</button>
+                    <button type="button" class="event-modal-btn cancel" id="cancel-event-btn">Cancel</button>
+                    <button type="submit" class="event-modal-btn save">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // XP system configuration
+        const xpPerTodo = 10;
+        const xpPerExam = 25;
+        const xpPerTopicDone = 50;
+        const xpToLevelUp = 600;
+
+        // Load data from localStorage or initialize if not exists
+        function loadData() {
+            const savedData = localStorage.getItem('studyQuestData');
+            if (savedData) {
+                return JSON.parse(savedData);
+            } else {
+                return {
+                    subjects: [],
+                    todos: [],
+                    exams: [],
+                    xp: 0,
+                    level: 1,
+                    badges: [],
+                    lastReset: null
+                };
+            }
+        }
+        
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('studyQuestData', JSON.stringify(appData));
+        }
+
+        // Create confetti effect
+        function createConfetti() {
+            const colors = ['#7C4DFF', '#B388FF', '#FFD740', '#FF80AB', '#48BB78'];
+            
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = `${Math.random() * 100}%`;
+                confetti.style.top = `-10px`;
+                confetti.style.width = `${Math.random() * 8 + 4}px`;
+                confetti.style.height = confetti.style.width;
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animationDuration = `${Math.random() * 3 + 2}s`;
+                confetti.style.animationDelay = `${Math.random() * 0.5}s`;
+                
+                document.body.appendChild(confetti);
+                
+                // Remove confetti after animation
+                setTimeout(() => {
+                    confetti.remove();
+                }, 5000);
+            }
+        }
+        
+        // Data structure to store all items
+        let appData = loadData();
+        
+        // DOM elements
+        const subjectsContainer = document.getElementById('subjects-container');
+        const todosContainer = document.getElementById('todo-list');
+        const examsContainer = document.getElementById('exams-container');
+        const deadlinesContainer = document.getElementById('deadlines-container');
+        const newSubjectInput = document.getElementById('new-subject');
+        const addSubjectBtn = document.getElementById('add-subject-btn');
+        const newTodoInput = document.getElementById('new-todo');
+        const addTodoBtn = document.getElementById('add-todo-btn');
+        const newExamInput = document.getElementById('new-exam');
+        const examDateInput = document.getElementById('exam-date');
+        const addExamBtn = document.getElementById('add-exam-btn');
+        const confirmModal = document.getElementById('confirm-modal');
+        const levelSpan = document.getElementById('level');
+        const xpSpan = document.getElementById('xp');
+        const xpToNextLevelSpan = document.getElementById('xp-to-next-level');
+        const progressBar = document.getElementById('progress-bar');
+        const cancelDeleteBtn = document.getElementById('cancel-delete');
+        const confirmDeleteBtn = document.getElementById('confirm-delete');
+        const badgesContainer = document.querySelector('.badges');
+        
+        // Variables for delete functionality
+        let itemToDelete = null;
+        let deleteType = null;
+        
+        // Calendar functionality
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        let events = JSON.parse(localStorage.getItem('calendarEvents')) || [];
+        
+        // Calendar DOM elements
+        const calendarDays = document.getElementById('calendar-days');
+        const calendarMonthYear = document.getElementById('calendar-month-year');
+        const prevMonthBtn = document.getElementById('prev-month');
+        const nextMonthBtn = document.getElementById('next-month');
+        const todayBtn = document.getElementById('today-btn');
+        const eventModal = document.getElementById('event-modal');
+        const eventForm = document.getElementById('event-form');
+        const deleteEventBtn = document.getElementById('delete-event-btn');
+        const cancelEventBtn = document.getElementById('cancel-event-btn');
+        
+        // Initialize the app
+        function initApp() {
+            renderSubjects();
+            renderTodos();
+            renderExams();
+            updateDeadlines();
+            updateXPDisplay();
+            checkDailyReset();
+            initCalendar();
+            
+            // Set exam date input to today's date by default
+            const today = new Date();
+            const formattedDate = today.toISOString().split('T')[0];
+            examDateInput.value = formattedDate;
+            examDateInput.min = formattedDate;
+        }
+
+        function updateXPDisplay() {
+            levelSpan.textContent = appData.level;
+            xpSpan.textContent = appData.xp;
+            xpToNextLevelSpan.textContent = xpToLevelUp;
+            
+            const progressPercentage = (appData.xp / xpToLevelUp) * 100;
+            progressBar.style.width = `${Math.min(progressPercentage, 100)}%`;
+            
+            // Check for level up
+            if (appData.xp >= xpToLevelUp) {
+                appData.level += 1;
+                appData.xp -= xpToLevelUp;
+                awardBadge(`Level ${appData.level}`);
+                saveData();
+                updateXPDisplay();
+                
+                // Big celebration for leveling up
+                createConfetti();
+                setTimeout(createConfetti, 300);
+                setTimeout(createConfetti, 600);
+            }
+        }
+
+        // Award a badge
+        function awardBadge(badgeName) {
+            if (!appData.badges.includes(badgeName)) {
+                appData.badges.push(badgeName);
+                saveData();
+                renderBadges();
+                
+                // Show badge notification
+                const notification = document.createElement('div');
+                notification.className = 'notification';
+                notification.textContent = `🏆 Earned: ${badgeName}!`;
+                notification.style.position = 'fixed';
+                notification.style.top = '20px';
+                notification.style.left = '50%';
+                notification.style.transform = 'translateX(-50%)';
+                notification.style.backgroundColor = 'var(--primary)';
+                notification.style.color = 'white';
+                notification.style.padding = '10px 20px';
+                notification.style.borderRadius = '20px';
+                notification.style.boxShadow = '0 3px 10px rgba(0,0,0,0.2)';
+                notification.style.zIndex = '1000';
+                notification.style.animation = 'fadeInOut 3s ease-in-out';
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.remove();
+                }, 3000);
+            }
+        }
+
+        // Render badges
+        function renderBadges() {
+            badgesContainer.innerHTML = '';
+            const possibleBadges = ['Level 2', 'Level 3', 'Level 5', '10 Tasks', '5 Exams', '20 Topics'];
+            possibleBadges.forEach(badge => {
+                const badgeElement = document.createElement('div');
+                badgeElement.className = `badge ${appData.badges.includes(badge) ? '' : 'locked'}`;
+                badgeElement.textContent = badge.charAt(0);
+                badgeElement.title = badge;
+                badgesContainer.appendChild(badgeElement);
+            });
+        }
+
+        // Render all subjects and topics
+        function renderSubjects() {
+            subjectsContainer.innerHTML = '';
+            
+            appData.subjects.forEach((subject, subjectIndex) => {
+                const subjectSection = document.createElement('div');
+                subjectSection.className = 'subject-section';
+                
+                const subjectHeader = document.createElement('div');
+                subjectHeader.className = 'subject-header';
+                
+                const subjectTitle = document.createElement('div');
+                subjectTitle.className = 'subject-title';
+                subjectTitle.textContent = subject.name;
+                
+                const deleteSubjectBtn = document.createElement('button');
+                deleteSubjectBtn.className = 'delete-subject';
+                deleteSubjectBtn.innerHTML = '&times;';
+                deleteSubjectBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    confirmDelete('subject', subjectIndex);
+                };
+                
+                const addTopicBtn = document.createElement('button');
+                addTopicBtn.className = 'add-btn';
+                addTopicBtn.textContent = '+';
+                addTopicBtn.onclick = () => showAddTopicInput(subjectIndex);
+                
+                subjectHeader.appendChild(subjectTitle);
+                subjectHeader.appendChild(deleteSubjectBtn);
+                subjectHeader.appendChild(addTopicBtn);
+                subjectSection.appendChild(subjectHeader);
+                
+                // Create topics list container
+                const topicsList = document.createElement('div');
+                topicsList.className = 'topics-list';
+                topicsList.id = `topics-list-${subjectIndex}`;
+                
+                // Add existing topics
+                subject.topics.forEach((topic, topicIndex) => {
+                    const topicItem = createTopicItem(subjectIndex, topicIndex, topic);
+                    topicsList.appendChild(topicItem);
+                });
+                
+                // Make topics list sortable
+                setupSortableTopics(topicsList, subjectIndex);
+                
+                subjectSection.appendChild(topicsList);
+                subjectsContainer.appendChild(subjectSection);
+            });
+        }
+        
+        // Create a topic item element
+        function createTopicItem(subjectIndex, topicIndex, topic) {
+            const topicItem = document.createElement('div');
+            topicItem.className = 'topic-item';
+            topicItem.draggable = true;
+            topicItem.dataset.subjectIndex = subjectIndex;
+            topicItem.dataset.topicIndex = topicIndex;
+            
+            const topicHandle = document.createElement('span');
+            topicHandle.className = 'topic-item-handle';
+            topicHandle.innerHTML = '☰';
+            topicHandle.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent text selection
+            
+            const topicName = document.createElement('span');
+            topicName.textContent = topic.name;
+            topicName.style.flexGrow = '1';
+            
+            const statusDropdown = document.createElement('div');
+            statusDropdown.className = 'status-dropdown';
+            
+            const statusBtn = document.createElement('button');
+            statusBtn.className = `status-btn ${topic.status}`;
+            statusBtn.textContent = capitalizeFirstLetter(topic.status);
+            statusBtn.onclick = (e) => {
+                e.stopPropagation();
+                statusDropdown.querySelector('.status-options').classList.toggle('show');
+            };
+            
+            const statusOptions = document.createElement('div');
+            statusOptions.className = 'status-options';
+            
+            const pendingOption = document.createElement('div');
+            pendingOption.className = 'status-option pending';
+            pendingOption.textContent = 'Pending';
+            pendingOption.onclick = () => changeTopicStatus(subjectIndex, topicIndex, 'pending');
+            
+            const activeOption = document.createElement('div');
+            activeOption.className = 'status-option active';
+            activeOption.textContent = 'Active';
+            activeOption.onclick = () => changeTopicStatus(subjectIndex, topicIndex, 'active');
+            
+            const overdueOption = document.createElement('div');
+            overdueOption.className = 'status-option overdue';
+            overdueOption.textContent = 'Overdue';
+            overdueOption.onclick = () => changeTopicStatus(subjectIndex, topicIndex, 'overdue');
+            
+            const doneOption = document.createElement('div');
+            doneOption.className = 'status-option done';
+            doneOption.textContent = 'Done';
+            doneOption.onclick = () => changeTopicStatus(subjectIndex, topicIndex, 'done');
+            
+            statusOptions.appendChild(pendingOption);
+            statusOptions.appendChild(activeOption);
+            statusOptions.appendChild(overdueOption);
+            statusOptions.appendChild(doneOption);
+            
+            statusDropdown.appendChild(statusBtn);
+            statusDropdown.appendChild(statusOptions);
+            
+            topicItem.appendChild(topicHandle);
+            topicItem.appendChild(topicName);
+            topicItem.appendChild(statusDropdown);
+            
+            // Drag and drop events
+            topicItem.addEventListener('dragstart', handleDragStart);
+            topicItem.addEventListener('dragover', handleDragOver);
+            topicItem.addEventListener('dragenter', handleDragEnter);
+            topicItem.addEventListener('dragleave', handleDragLeave);
+            topicItem.addEventListener('drop', handleDrop);
+            topicItem.addEventListener('dragend', handleDragEnd);
+            
+            return topicItem;
+        }
+        
+        // Set up sortable topics list
+        function setupSortableTopics(topicsList, subjectIndex) {
+            topicsList.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const afterElement = getDragAfterElement(topicsList, e.clientY);
+                const draggable = document.querySelector('.dragging');
+                if (afterElement == null) {
+                    topicsList.appendChild(draggable);
+                } else {
+                    topicsList.insertBefore(draggable, afterElement);
+                }
+            });
+        }
+        
+        // Helper function for drag and drop positioning
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.topic-item:not(.dragging)')];
+            
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+        
+        // Drag and drop handlers
+        function handleDragStart(e) {
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+        
+        function handleDragEnter(e) {
+            e.preventDefault();
+            this.classList.add('dragover');
+        }
+        
+        function handleDragLeave() {
+            this.classList.remove('dragover');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+            
+            const subjectIndex = parseInt(this.dataset.subjectIndex);
+            const draggedSubjectIndex = parseInt(document.querySelector('.dragging').dataset.subjectIndex);
+            
+            if (subjectIndex === draggedSubjectIndex) {
+                const afterElement = getDragAfterElement(this.parentNode, e.clientY);
+                const draggable = document.querySelector('.dragging');
+                
+                if (afterElement == null) {
+                    this.parentNode.appendChild(draggable);
+                } else {
+                    this.parentNode.insertBefore(draggable, afterElement);
+                }
+                
+                updateTopicOrder(subjectIndex);
+            }
+        }
+        
+        function handleDragEnd() {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.topic-item').forEach(item => {
+                item.classList.remove('dragover');
+            });
+        }
+        
+        // Update topic order in appData after drag and drop
+        function updateTopicOrder(subjectIndex) {
+            const topicsList = document.getElementById(`topics-list-${subjectIndex}`);
+            const newTopics = [];
+            
+            Array.from(topicsList.children).forEach((item, index) => {
+                const topicIndex = parseInt(item.dataset.topicIndex);
+                newTopics.push(appData.subjects[subjectIndex].topics[topicIndex]);
+                item.dataset.topicIndex = index;
+            });
+            
+            appData.subjects[subjectIndex].topics = newTopics;
+            saveData();
+        }
+        
+        // Show input field to add new topic
+        function showAddTopicInput(subjectIndex) {
+            const subjectSection = subjectsContainer.children[subjectIndex];
+            const existingInput = subjectSection.querySelector('.add-topic');
+            if (existingInput) return;
+            
+            const addTopicDiv = document.createElement('div');
+            addTopicDiv.className = 'add-topic';
+            
+            const topicInput = document.createElement('input');
+            topicInput.type = 'text';
+            topicInput.placeholder = 'New topic name...';
+            
+            const addBtn = document.createElement('button');
+            addBtn.textContent = 'Add';
+            addBtn.onclick = () => {
+                const topicName = topicInput.value.trim();
+                if (topicName) {
+                    appData.subjects[subjectIndex].topics.push({
+                        name: topicName,
+                        status: 'pending'
+                    });
+                    saveData();
+                    renderSubjects();
+                }
+            };
+            
+            addTopicDiv.appendChild(topicInput);
+            addTopicDiv.appendChild(addBtn);
+            
+            subjectSection.appendChild(addTopicDiv);
+            topicInput.focus();
+        }
+        
+        // Change status of a topic
+        function changeTopicStatus(subjectIndex, topicIndex, status) {
+            const wasDone = appData.subjects[subjectIndex].topics[topicIndex].status === 'done';
+            appData.subjects[subjectIndex].topics[topicIndex].status = status;
+            
+            // Award XP when marking a topic as done
+            if (status === 'done' && !wasDone) {
+                appData.xp += xpPerTopicDone;
+                createConfetti();
+            } else if (status !== 'done' && wasDone) {
+                // Deduct XP if unmarking as done (optional)
+                appData.xp = Math.max(0, appData.xp - xpPerTopicDone);
+            }
+            
+            saveData();
+            renderSubjects();
+            updateXPDisplay();
+        }
+        
+        // Render to-do list
+        function renderTodos() {
+            todosContainer.innerHTML = '';
+            
+            appData.todos.forEach((todo, index) => {
+                const todoItem = document.createElement('div');
+                todoItem.className = 'todo-item';
+                
+                const todoContent = document.createElement('div');
+                todoContent.className = 'todo-item-content';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `todo-${index}`;
+                checkbox.checked = todo.completed;
+                checkbox.onchange = () => toggleTodoComplete(index);
+                
+                const label = document.createElement('label');
+                label.htmlFor = `todo-${index}`;
+                label.textContent = todo.text;
+                if (todo.completed) {
+                    label.style.textDecoration = 'line-through';
+                    label.style.color = '#888';
+                }
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-todo';
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.onclick = () => confirmDelete('todo', index);
+                
+                todoContent.appendChild(checkbox);
+                todoContent.appendChild(label);
+                
+                todoItem.appendChild(todoContent);
+                todoItem.appendChild(deleteBtn);
+                
+                todosContainer.appendChild(todoItem);
+            });
+        }
+        
+        // Toggle todo completion status
+        function toggleTodoComplete(index) {
+            appData.todos[index].completed = !appData.todos[index].completed;
+            
+            // Award XP when completing a task
+            if (appData.todos[index].completed) {
+                appData.xp += xpPerTodo;
+                createConfetti();
+            } else {
+                // Deduct XP if unchecking (optional)
+                appData.xp = Math.max(0, appData.xp - xpPerTodo);
+            }
+            
+            saveData();
+            renderTodos();
+            updateXPDisplay();
+        }
+        
+        // Render exam schedule
+        function renderExams() {
+            examsContainer.innerHTML = '';
+            
+            appData.exams.forEach((exam, index) => {
+                const examItem = document.createElement('div');
+                examItem.className = 'exam-item';
+                
+                // Check exam date status
+                const today = new Date();
+                const examDate = new Date(exam.date);
+                const diffTime = examDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (exam.completed) {
+                    examItem.classList.add('completed');
+                } else if (diffDays <= 5 && diffDays >= 0) {
+                    examItem.classList.add('urgent');
+                } else if (diffDays < 0) {
+                    examItem.classList.add('past');
+                }
+                
+                const examContent = document.createElement('div');
+                examContent.className = 'exam-item-content';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'exam-checkbox';
+                checkbox.checked = exam.completed;
+                checkbox.onchange = () => toggleExamComplete(index);
+                
+                const examName = document.createElement('span');
+                examName.textContent = exam.name;
+                
+                const examDateSpan = document.createElement('span');
+                examDateSpan.textContent = formatDate(exam.date);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-exam';
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.onclick = () => confirmDelete('exam', index);
+                
+                examContent.appendChild(checkbox);
+                examContent.appendChild(examName);
+                
+                examItem.appendChild(examContent);
+                examItem.appendChild(examDateSpan);
+                examItem.appendChild(deleteBtn);
+                
+                examsContainer.appendChild(examItem);
+            });
+            
+            updateDeadlines();
+        }
+        
+        // Toggle exam completion status
+        function toggleExamComplete(index) {
+            appData.exams[index].completed = !appData.exams[index].completed;
+            
+            // Award XP when completing an exam
+            if (appData.exams[index].completed) {
+                appData.xp += xpPerExam;
+                createConfetti();
+            } else {
+                // Deduct XP if unchecking (optional)
+                appData.xp = Math.max(0, appData.xp - xpPerExam);
+            }
+            
+            saveData();
+            renderExams();
+            updateDeadlines();
+            updateXPDisplay();
+        }
+        
+        // Update upcoming deadlines (next 2 weeks only)
+        function updateDeadlines() {
+            deadlinesContainer.innerHTML = '';
+            
+            const today = new Date();
+            const twoWeeksLater = new Date();
+            twoWeeksLater.setDate(today.getDate() + 14);
+            
+            // Filter exams for the next 2 weeks that aren't completed
+            const relevantExams = appData.exams.filter(exam => {
+                const examDate = new Date(exam.date);
+                return !exam.completed && examDate <= twoWeeksLater;
+            });
+            
+            // Sort by date (soonest first)
+            relevantExams.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Add exams to deadlines
+            relevantExams.forEach(exam => {
+                const examDate = new Date(exam.date);
+                const diffTime = examDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                const deadlineItem = document.createElement('div');
+                deadlineItem.className = 'deadline-item';
+                
+                if (diffDays <= 5 && diffDays >= 0) {
+                    deadlineItem.classList.add('urgent');
+                } else if (diffDays < 0) {
+                    deadlineItem.classList.add('past');
+                }
+                
+                const deadlineName = document.createElement('strong');
+                deadlineName.textContent = exam.name;
+                
+                const deadlineDate = document.createElement('p');
+                if (diffDays >= 0) {
+                    deadlineDate.textContent = `Due: ${formatDate(exam.date)} (${diffDays} ${diffDays === 1 ? 'day' : 'days'})`;
+                } else {
+                    deadlineDate.textContent = `Overdue: ${formatDate(exam.date)} (${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'day' : 'days'} ago)`;
+                }
+                
+                deadlineItem.appendChild(deadlineName);
+                deadlineItem.appendChild(deadlineDate);
+                
+                deadlinesContainer.appendChild(deadlineItem);
+            });
+            
+            // Add message if no deadlines
+            if (deadlinesContainer.children.length === 0) {
+                const noDeadlines = document.createElement('p');
+                noDeadlines.textContent = 'No upcoming deadlines in the next 2 weeks';
+                noDeadlines.style.color = '#666';
+                noDeadlines.style.fontStyle = 'italic';
+                deadlinesContainer.appendChild(noDeadlines);
+            }
+        }
+        
+        // Confirm before deleting an item
+        function confirmDelete(type, index) {
+            itemToDelete = index;
+            deleteType = type;
+            confirmModal.style.display = 'flex';
+        }
+        
+        // Format date as "Month Day, Year"
+        function formatDate(dateString) {
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            return new Date(dateString).toLocaleDateString(undefined, options);
+        }
+        
+        // Capitalize first letter of a string
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+        
+        // Check if it's time for daily reset (6 AM)
+        function checkDailyReset() {
+            const now = new Date();
+            const lastReset = localStorage.getItem('lastReset');
+            const resetTime = new Date();
+            resetTime.setHours(6, 0, 0, 0);
+            
+            // If it's after 6 AM and we haven't reset today
+            if (now >= resetTime && (!lastReset || new Date(lastReset) < resetTime)) {
+                resetDailyTodos();
+                localStorage.setItem('lastReset', now.toISOString());
+            }
+            
+            // Check again in 1 minute
+            setTimeout(checkDailyReset, 60000);
+        }
+        
+        // Reset todos at 6 AM daily
+        function resetDailyTodos() {
+            appData.todos = appData.todos.filter(todo => todo.completed === false);
+            saveData();
+            renderTodos();
+        }
+
+        /* Calendar Functions */
+        // Initialize calendar
+        function initCalendar() {
+            renderCalendar();
+            
+            // Load exams as events
+            appData.exams.forEach(exam => {
+                if (!events.some(e => e.id === `exam-${exam.name}`)) {
+                    events.push({
+                        id: `exam-${exam.name}`,
+                        name: exam.name,
+                        date: exam.date,
+                        type: 'exam',
+                        completed: exam.completed
+                    });
+                }
+            });
+            
+            saveEvents();
+        }
+
+        // Render calendar
+        function renderCalendar() {
+            // Update month/year display
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            calendarMonthYear.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+            
+            // Clear previous days
+            calendarDays.innerHTML = '';
+            
+            // Get first day of month and total days in month
+            const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const today = new Date();
+            
+            // Add empty cells for days before first day of month
+            for (let i = 0; i < firstDay; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'calendar-day empty other-month';
+                calendarDays.appendChild(emptyDay);
+            }
+            
+            // Add days of month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                
+                // Check if this is today
+                const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                if (currentYear === today.getFullYear() && 
+                    currentMonth === today.getMonth() && 
+                    day === today.getDate()) {
+                    dayElement.classList.add('today');
+                }
+                
+                // Add date number
+                const dateElement = document.createElement('div');
+                dateElement.className = 'calendar-date';
+                dateElement.textContent = day;
+                dayElement.appendChild(dateElement);
+                
+                // Add events for this day
+                const eventsElement = document.createElement('div');
+                eventsElement.className = 'calendar-events';
+                
+                // Find events for this day
+                const dayEvents = events.filter(event => {
+                    const eventDate = new Date(event.date);
+                    return eventDate.getFullYear() === currentYear && 
+                           eventDate.getMonth() === currentMonth && 
+                           eventDate.getDate() === day;
+                });
+                
+                // Add events to day
+                dayEvents.forEach(event => {
+                    const eventElement = document.createElement('div');
+                    eventElement.className = `calendar-event ${event.type} ${event.completed ? 'completed' : ''}`;
+                    eventElement.textContent = event.name;
+                    eventElement.onclick = () => openEventModal(event, dateStr);
+                    eventsElement.appendChild(eventElement);
+                });
+                
+                // Add "add event" button
+                const addEventBtn = document.createElement('button');
+                addEventBtn.className = 'add-event-btn';
+                addEventBtn.textContent = '+';
+                addEventBtn.onclick = () => openEventModal(null, dateStr);
+                
+                dayElement.appendChild(eventsElement);
+                dayElement.appendChild(addEventBtn);
+                calendarDays.appendChild(dayElement);
+            }
+            
+            // Add empty cells for days after last day of month to complete grid
+            const totalCells = firstDay + daysInMonth;
+            const remainingCells = 42 - totalCells; // 6 rows x 7 days
+            
+            for (let i = 0; i < remainingCells; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'calendar-day empty other-month';
+                calendarDays.appendChild(emptyDay);
+            }
+        }
+
+        // Open event modal
+        function openEventModal(event, date) {
+            const modal = document.getElementById('event-modal');
+            const form = document.getElementById('event-form');
+            const title = document.getElementById('event-modal-title');
+            const deleteBtn = document.getElementById('delete-event-btn');
+            
+            if (event) {
+                // Edit existing event
+                title.textContent = 'Edit Event';
+                document.getElementById('event-id').value = event.id;
+                document.getElementById('event-name').value = event.name;
+                document.getElementById('event-type').value = event.type || 'general';
+                document.getElementById('event-start-time').value = event.startTime || '';
+                document.getElementById('event-end-time').value = event.endTime || '';
+                document.getElementById('event-description').value = event.description || '';
+                document.getElementById('event-date').value = event.date;
+                deleteBtn.style.display = 'block';
+            } else {
+                // Add new event
+                title.textContent = 'Add Event';
+                form.reset();
+                document.getElementById('event-date').value = date;
+                document.getElementById('event-id').value = `event-${Date.now()}`;
+                deleteBtn.style.display = 'none';
+            }
+            
+            modal.style.display = 'flex';
+        }
+
+        // Save event
+        function saveEvent(eventData) {
+            const existingIndex = events.findIndex(e => e.id === eventData.id);
+            
+            if (existingIndex >= 0) {
+                // Update existing event
+                events[existingIndex] = eventData;
+            } else {
+                // Add new event
+                events.push(eventData);
+            }
+            
+            saveEvents();
+            renderCalendar();
+        }
+
+        // Delete event
+        function deleteEvent(eventId) {
+            events = events.filter(event => event.id !== eventId);
+            saveEvents();
+            renderCalendar();
+        }
+
+        // Save events to localStorage
+        function saveEvents() {
+            localStorage.setItem('calendarEvents', JSON.stringify(events));
+        }
+        
+        // Event listeners
+        addSubjectBtn.addEventListener('click', () => {
+            const subjectName = newSubjectInput.value.trim();
+            if (subjectName) {
+                appData.subjects.push({
+                    name: subjectName,
+                    topics: []
+                });
+                newSubjectInput.value = '';
+                saveData();
+                renderSubjects();
+            }
+        });
+        
+        addTodoBtn.addEventListener('click', () => {
+            const todoText = newTodoInput.value.trim();
+            if (todoText) {
+                appData.todos.push({
+                    text: todoText,
+                    completed: false
+                });
+                newTodoInput.value = '';
+                saveData();
+                renderTodos();
+            }
+        });
+        
+        newTodoInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addTodoBtn.click();
+            }
+        });
+        
+        addExamBtn.addEventListener('click', () => {
+            const examName = newExamInput.value.trim();
+            const examDate = examDateInput.value;
+            
+            if (examName && examDate) {
+                appData.exams.push({
+                    name: examName,
+                    date: examDate,
+                    completed: false
+                });
+                newExamInput.value = '';
+                examDateInput.value = new Date().toISOString().split('T')[0];
+                saveData();
+                renderExams();
+            }
+        });
+        
+        cancelDeleteBtn.addEventListener('click', () => {
+            confirmModal.style.display = 'none';
+        });
+        
+        confirmDeleteBtn.addEventListener('click', () => {
+            if (deleteType === 'todo') {
+                appData.todos.splice(itemToDelete, 1);
+                saveData();
+                renderTodos();
+            } else if (deleteType === 'exam') {
+                appData.exams.splice(itemToDelete, 1);
+                saveData();
+                renderExams();
+            } else if (deleteType === 'subject') {
+                appData.subjects.splice(itemToDelete, 1);
+                saveData();
+                renderSubjects();
+            }
+            
+            confirmModal.style.display = 'none';
+        });
+
+        // Calendar event listeners
+        prevMonthBtn.addEventListener('click', () => {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar();
+        });
+
+        nextMonthBtn.addEventListener('click', () => {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            renderCalendar();
+        });
+
+        todayBtn.addEventListener('click', () => {
+            const today = new Date();
+            currentMonth = today.getMonth();
+            currentYear = today.getFullYear();
+            renderCalendar();
+        });
+
+        // Event form submission
+        eventForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const eventData = {
+                id: document.getElementById('event-id').value,
+                name: document.getElementById('event-name').value,
+                type: document.getElementById('event-type').value,
+                date: document.getElementById('event-date').value,
+                startTime: document.getElementById('event-start-time').value,
+                endTime: document.getElementById('event-end-time').value,
+                description: document.getElementById('event-description').value,
+                completed: false
+            };
+            
+            saveEvent(eventData);
+            eventModal.style.display = 'none';
+        });
+
+        deleteEventBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to delete this event?')) {
+                const eventId = document.getElementById('event-id').value;
+                deleteEvent(eventId);
+                eventModal.style.display = 'none';
+            }
+        });
+
+        cancelEventBtn.addEventListener('click', () => {
+            eventModal.style.display = 'none';
+        });
+
+        // Close modals when clicking outside
+        window.addEventListener('click', (e) => {
+            if (e.target === confirmModal) {
+                confirmModal.style.display = 'none';
+            }
+            if (e.target === eventModal) {
+                eventModal.style.display = 'none';
+            }
+        });
+        
+        // Close dropdowns when clicking outside
+        window.addEventListener('click', () => {
+            document.querySelectorAll('.status-options').forEach(options => {
+                options.classList.remove('show');
+            });
+        });
+        
+        // Initialize the app
+        initApp();
+    </script>
+</body>
+</html>

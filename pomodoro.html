@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pomodoro Quest</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Consolas&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --pending: #FFD700;
+            --active: #00FF7F;
+            --overdue: #FF4500;
+            --done: #32CD32;
+            --primary: #1E90FF;
+            --secondary: #FF69B4;
+            --danger: #DC143C;
+            --completed: #228B22;
+            --background: #E6E6FA;
+            --accent: #FFD700;
+        }
+
+        body {
+            font-family: 'Consolas', monospace;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, var(--background), #FFFACD);
+            color: #222;
+            overflow-x: hidden;
+            animation: fadeIn 1s ease-in;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .pomodoro-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .pomodoro-container:hover {
+            transform: translateY(-5px);
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.2), transparent);
+            animation: sparkle 8s infinite;
+        }
+
+        @keyframes sparkle {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        h1 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.8rem;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .timer-display {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin: 20px 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+
+        .timer-status {
+            font-family: 'Consolas', monospace;
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .timer-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .timer-btn {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.9rem;
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .timer-btn:hover {
+            background: var(--secondary);
+            transform: scale(1.1);
+        }
+
+        .timer-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .xp-system {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .xp-info {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.9rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .progress-container {
+            background: rgba(0,0,0,0.1);
+            border-radius: 12px;
+            height: 20px;
+            overflow: hidden;
+            width: 50%;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.5s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.2) 75%, transparent 75%, transparent);
+            background-size: 20px 20px;
+            animation: move 2s linear infinite;
+        }
+
+        @keyframes move {
+            0% { background-position: 0 0; }
+            100% { background-position: 20px 20px; }
+        }
+
+        .settings {
+            margin-top: 20px;
+        }
+
+        .settings h2 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.2rem;
+            color: var(--primary);
+            margin: 0 0 10px 0;
+        }
+
+        .settings-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .settings-form label {
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #333;
+        }
+
+        .settings-form input {
+            padding: 8px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            width: 60px;
+            text-align: center;
+        }
+
+        .settings-form input:focus {
+            border-color: var(--primary);
+            outline: none;
+        }
+
+        .settings-form button {
+            padding: 10px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.9rem;
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .settings-form button:hover {
+            background: var(--secondary);
+            transform: scale(1.1);
+        }
+
+        .badges {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .badge {
+            width: 40px;
+            height: 40px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.2rem;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+            transition: transform 0.3s;
+            animation: bounceIn 0.5s ease;
+        }
+
+        .badge:hover {
+            transform: scale(1.1);
+        }
+
+        .badge.locked {
+            background: #A9A9A9;
+            color: #555;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="pomodoro-container">
+        <header>
+            <h1>Pomodoro Quest</h1>
+        </header>
+        <div class="xp-system">
+            <div class="xp-info">
+                <strong>Level:</strong> <span id="level">1</span><br>
+                <strong>XP:</strong> <span id="xp">450</span>/<span id="xp-to-next-level">600</span>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+        </div>
+        <div class="timer-display" id="timer-display">25:00</div>
+        <div class="timer-controls">
+            <button class="timer-btn" id="start-btn">Start</button>
+            <button class="timer-btn" id="pause-btn" disabled>Pause</button>
+            <button class="timer-btn" id="reset-btn">Reset</button>
+        </div>
+        <div class="settings">
+            <h2>Settings</h2>
+            <div class="settings-form">
+                <label>Work Duration (min): <input type="number" id="work-duration" min="1" value="25"></label>
+                <label>Short Break (min): <input type="number" id="short-break-duration" min="1" value="5"></label>
+                <label>Long Break (min): <input type="number" id="long-break-duration" min="1" value="15"></label>
+                <button id="save-settings-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase configuration (replace with your actual Firebase project credentials)
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+        } catch (error) {
+            console.error("Firebase initialization failed:", error);
+        }
+        const db = firebase.firestore();
+        const userId = "user123"; // Replace with actual user authentication ID
+
+        // App data
+        let appData = {
+            workDuration: 25,
+            shortBreakDuration: 5,
+            longBreakDuration: 15,
+            sessionCount: 0,
+            xp: 0,
+            level: 1,
+            badges: []
+        };
+
+        // Timer state
+        let timer = null;
+        let timeLeft = appData.workDuration * 60;
+        let isRunning = false;
+        let isWorkSession = true;
+        const xpPerWorkSession = 25;
+        const xpToLevelUp = 600;
+
+        // DOM elements
+        const timerDisplay = document.getElementById('timer-display');
+        const timerStatus = document.getElementById('timer-status');
+        const startBtn = document.getElementById('start-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const workDurationInput = document.getElementById('work-duration');
+        const shortBreakDurationInput = document.getElementById('short-break-duration');
+        const longBreakDurationInput = document.getElementById('long-break-duration');
+        const saveSettingsBtn = document.getElementById('save-settings-btn');
+        const levelSpan = document.getElementById('level');
+        const xpSpan = document.getElementById('xp');
+        const xpToNextLevelSpan = document.getElementById('xp-to-next-level');
+        const progressBar = document.getElementById('progress-bar');
+        const badgesContainer = document.getElementById('badges-container');
+
+        // Sound for session completion
+        const notificationSound = new Audio('https://freesound.org/data/previews/316/316847_4939433-lq.mp3');
+
+        // Load data from Firestore
+        async function loadData() {
+            try {
+                const docRef = db.collection('pomodoro').doc(userId);
+                const doc = await docRef.get();
+                if (doc.exists) {
+                    appData = { ...appData, ...doc.data() };
+                } else {
+                    await docRef.set(appData);
+                }
+            } catch (error) {
+                console.error("Error loading data:", error);
+            }
+            timeLeft = appData.workDuration * 60;
+            updateInputs();
+            updateXPDisplay();
+            renderBadges();
+        }
+
+        // Save data to Firestore
+        async function saveData() {
+            try {
+                await db.collection('pomodoro').doc(userId).set(appData);
+            } catch (error) {
+                console.error("Error saving data:", error);
+            }
+        }
+
+        // Update input fields with current durations
+        function updateInputs() {
+            workDurationInput.value = appData.workDuration;
+            shortBreakDurationInput.value = appData.shortBreakDuration;
+            longBreakDurationInput.value = appData.longBreakDuration;
+        }
+
+        // Update XP display
+        function updateXPDisplay() {
+            levelSpan.textContent = appData.level || 1;
+            xpSpan.textContent = appData.xp || 0;
+            xpToNextLevelSpan.textContent = xpToLevelUp;
+            const progress = ((appData.xp || 0) / xpToLevelUp) * 100;
+            progressBar.style.width = `${progress}%`;
+
+            // Check for level up
+            while ((appData.xp || 0) >= xpToLevelUp) {
+                appData.xp -= xpToLevelUp;
+                appData.level = (appData.level || 1) + 1;
+                awardBadge(`Level ${appData.level}`);
+                saveData();
+                updateXPDisplay();
+            }
+        }
+
+        // Award a badge
+        async function awardBadge(badgeName) {
+            if (!appData.badges.includes(badgeName)) {
+                appData.badges.push(badgeName);
+                await saveData();
+                renderBadges();
+            }
+        }
+
+        // Render badges
+        function renderBadges() {
+            badgesContainer.innerHTML = '';
+            const possibleBadges = ['Level 2', 'Level 3', '10 Sessions'];
+            possibleBadges.forEach(badge => {
+                const badgeElement = document.createElement('div');
+                badgeElement.className = `badge ${appData.badges.includes(badge) ? '' : 'locked'}`;
+                badgeElement.textContent = badge.charAt(0);
+                badgeElement.title = badge;
+                badgesContainer.appendChild(badgeElement);
+            });
+        }
+
+        // Format time as MM:SS
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Update timer display
+        function updateTimerDisplay() {
+            timerDisplay.textContent = formatTime(timeLeft);
+            timerStatus.textContent = isWorkSession ? 'Work Session' : (appData.sessionCount % 4 === 0 ? 'Long Break' : 'Short Break');
+        }
+
+        // Start the timer
+        function startTimer() {
+            if (!isRunning) {
+                isRunning = true;
+                startBtn.disabled = true;
+                pauseBtn.disabled = false;
+                timer = setInterval(() => {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    if (timeLeft <= 0) {
+                        clearInterval(timer);
+                        isRunning = false;
+                        notificationSound.play().catch(error => console.error("Error playing sound:", error));
+                        if (isWorkSession) {
+                            appData.sessionCount = (appData.sessionCount || 0) + 1;
+                            appData.xp = (appData.xp || 0) + xpPerWorkSession;
+                            if (appData.sessionCount >= 10) {
+                                awardBadge('10 Sessions');
+                            }
+                            updateXPDisplay();
+                            isWorkSession = false;
+                            timeLeft = (appData.sessionCount % 4 === 0) ? appData.longBreakDuration * 60 : appData.shortBreakDuration * 60;
+                        } else {
+                            isWorkSession = true;
+                            timeLeft = appData.workDuration * 60;
+                        }
+                        saveData();
+                        updateTimerDisplay();
+                        startTimer(); // Auto-start next session
+                    }
+                }, 1000);
+            }
+        }
+
+        // Pause the timer
+        function pauseTimer() {
+            if (isRunning) {
+                clearInterval(timer);
+                isRunning = false;
+                startBtn.disabled = false;
+                pauseBtn.disabled = true;
+            }
+        }
+
+        // Reset the timer
+        function resetTimer() {
+            clearInterval(timer);
+            isRunning = false;
+            isWorkSession = true;
+            timeLeft = appData.workDuration * 60;
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+            updateTimerDisplay();
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startTimer);
+        pauseBtn.addEventListener('click', pauseTimer);
+        resetBtn.addEventListener('click', resetTimer);
+        saveSettingsBtn.addEventListener('click', async () => {
+            const work = parseInt(workDurationInput.value);
+            const shortBreak = parseInt(shortBreakDurationInput.value);
+            const longBreak = parseInt(longBreakDurationInput.value);
+            if (work >= 1 && shortBreak >= 1 && longBreak >= 1) {
+                appData.workDuration = work;
+                appData.shortBreakDuration = shortBreak;
+                appData.longBreakDuration = longBreak;
+                if (!isRunning) {
+                    timeLeft = appData.workDuration * 60;
+                    updateTimerDisplay();
+                }
+                await saveData();
+            } else {
+                alert('Please enter valid durations (at least 1 minute).');
+            }
+        });
+
+        // Initialize the app
+        async function initApp() {
+            await loadData();
+            updateTimerDisplay();
+        }
+
+        initApp().catch(error => console.error("Error initializing app:", error));
+    </script>
+</body>
+</html>
